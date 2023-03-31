@@ -26,10 +26,6 @@ public class RavenDbClient extends DB {
   private static final OkHttpClient CLIENT = new OkHttpClient().newBuilder().build();
 
   private static String url;
-  public static final String PORT_PROPERTY = "port";
-  public static final String PORT_PROPERTY_DEFAULT = "8080";
-  public static final String DBNAME_PROPERTY = "ravendb.dbname";
-  public static final String DBNAME_PROPERTY_DEFAULT = "ycsb";
   private static String databaseName;
   private final List<String> batchInserts = new ArrayList<>();
   private static boolean debug = false;
@@ -79,16 +75,20 @@ public class RavenDbClient extends DB {
         // Set insert batchsize, default 1 - to be YCSB-original equivalent
         batchSize = Integer.parseInt(props.getProperty("batchsize", "1"));
         debug = Boolean.parseBoolean(props.getProperty("debug", "false"));
-        databaseName = props.getProperty(DBNAME_PROPERTY, DBNAME_PROPERTY_DEFAULT);
+        databaseName = props.getProperty("ravendb.dbname", "ycsb");
         url = props.getProperty("ravendb.url", null);
-        String port = props.getProperty(PORT_PROPERTY, PORT_PROPERTY_DEFAULT);
+        String port = props.getProperty("port", "8080");
+        boolean concurrency = Boolean.parseBoolean(props.getProperty("useOptimisticConcurrency", "false"));
         if (url == null) {
           url = "http://localhost:" + port;
         } else {
           url += ":" + port;
         }
         DocumentStore store =
-            new DocumentStore("http://localhost:8080", "Northwind");
+            new DocumentStore(url, databaseName);
+        if (concurrency){
+          store.getConventions().setUseOptimisticConcurrency(true);
+        }
         store.initialize();
         GetDatabaseNamesOperation operation = new GetDatabaseNamesOperation(0, 25);
         String[] databaseNames = store.maintenance().server().send(operation);
