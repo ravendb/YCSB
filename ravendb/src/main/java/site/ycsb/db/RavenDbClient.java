@@ -7,14 +7,12 @@ import net.ravendb.client.serverwide.operations.GetDatabaseNamesOperation;
 import okhttp3.*;
 import org.json.JSONArray;
 import org.json.JSONObject;
-import site.ycsb.*;
+import site.ycsb.ByteIterator;
+import site.ycsb.DB;
+import site.ycsb.Status;
+import site.ycsb.StringByteIterator;
 
-import java.io.FileInputStream;
 import java.io.IOException;
-import java.security.KeyStore;
-import java.security.KeyStoreException;
-import java.security.NoSuchAlgorithmException;
-import java.security.cert.CertificateException;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Matcher;
@@ -145,7 +143,6 @@ public class RavenDbClient extends DB {
 
     RequestBody insertBody = RequestBody.create(records, MEDIA_TYPE);
     Request request = requestBuilder(insertBody, httpMethod, path);
-    System.out.println(request.headers());
     try (Response response = CLIENT.newCall(request).execute()) {
       if (response.isSuccessful()) {
         return Status.OK;
@@ -307,8 +304,6 @@ public class RavenDbClient extends DB {
         .url(url + "/databases/" + databaseName + path)
         .method(method, body)
         .addHeader("Content-Type", "application/json")
-        .addHeader("--key", "Test")
-        .addHeader("--cert", "TestValue")
         .build();
   }
 
