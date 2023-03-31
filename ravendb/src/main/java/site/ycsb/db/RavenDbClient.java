@@ -212,6 +212,7 @@ public class RavenDbClient extends DB {
     if (matcher.find()) {
       numKey = Integer.parseInt(matcher.group(1));
     }
+    // TODO: Check if this can be done with BETWEEN instead
     for (int i = 0; i < recordcount; i++) {
       path.append("&id=user").append(numKey + i);
     }
