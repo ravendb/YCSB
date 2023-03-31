@@ -138,6 +138,7 @@ LICENSE file.
     <openjpa.jdbc.version>2.1.1</openjpa.jdbc.version>
     <orientdb.version>2.2.37</orientdb.version>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <raven.version>5.4.1</raven.version>
     <redis.version>2.9.0</redis.version>
     <riak.version>2.0.5</riak.version>
     <rocksdb.version>6.2.2</rocksdb.version>
@@ -203,6 +204,7 @@ LICENSE file.
     <module>tablestore</module>
     <module>voltdb</module>
     <module>zookeeper</module>
+    <module>ravendb</module>
   </modules>
 
   <build>
