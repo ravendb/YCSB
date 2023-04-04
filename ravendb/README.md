@@ -21,7 +21,7 @@ This section describes how to run YCSB on RavenDB.
 
 ###  RavenDB Configuration Parameters
 
-* `ravendb.url` (required): defines the RavenDB endpoint, format `http://IP`, the binding uses the default port `8080`
+* `ravendb.host` (required): defines the RavenDB endpoint, format `http://IP`, the binding uses the default port `8080`
 
 * `port` (optional, default=8080):  the port that the RavenDB database listens on
 

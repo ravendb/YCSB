@@ -76,14 +76,10 @@ public class RavenDbClient extends DB {
         batchSize = Integer.parseInt(props.getProperty("batchsize", "1"));
         debug = Boolean.parseBoolean(props.getProperty("debug", "false"));
         databaseName = props.getProperty("ravendb.dbname", "ycsb");
-        url = props.getProperty("ravendb.url", null);
+        url = props.getProperty("ravendb.host", null);
         String port = props.getProperty("port", "8080");
         boolean concurrency = Boolean.parseBoolean(props.getProperty("useOptimisticConcurrency", "false"));
-        if (url == null) {
-          url = "http://localhost:" + port;
-        } else {
-          url += ":" + port;
-        }
+        url = "http://" + url + ":" + port;
         DocumentStore store =
             new DocumentStore(url, databaseName);
         if (concurrency){
