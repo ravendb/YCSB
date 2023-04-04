@@ -192,6 +192,7 @@ LICENSE file.
     <module>orientdb</module>
     <module>postgrenosql</module>
     <module>rados</module>
+    <module>ravendb</module>
     <module>redis</module>
     <module>rest</module>
     <module>riak</module>
@@ -204,7 +205,6 @@ LICENSE file.
     <module>tablestore</module>
     <module>voltdb</module>
     <module>zookeeper</module>
-    <module>ravendb</module>
   </modules>
 
   <build>
