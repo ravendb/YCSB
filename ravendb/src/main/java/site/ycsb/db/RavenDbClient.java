@@ -78,13 +78,12 @@ public class RavenDbClient extends DB {
         databaseName = props.getProperty("ravendb.dbname", "ycsb");
         url = props.getProperty("ravendb.host", null);
         String port = props.getProperty("port", "8080");
-        boolean concurrency = Boolean.parseBoolean(props.getProperty("useOptimisticConcurrency", "false"));
+        // TODO: implement ChangeVector if optimistic concurrency is enabled, requires the Database ID
+        // TOD0: Check how to find the Database ID
+//        boolean concurrency = Boolean.parseBoolean(props.getProperty("useOptimisticConcurrency", "false"));
         url = "http://" + url + ":" + port;
         DocumentStore store =
             new DocumentStore(url, databaseName);
-        if (concurrency){
-          store.getConventions().setUseOptimisticConcurrency(true);
-        }
         store.initialize();
         GetDatabaseNamesOperation operation = new GetDatabaseNamesOperation(0, 25);
         String[] databaseNames = store.maintenance().server().send(operation);
