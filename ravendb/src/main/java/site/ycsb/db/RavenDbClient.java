@@ -79,7 +79,8 @@ public class RavenDbClient extends DB {
         url = props.getProperty("ravendb.host", null);
         String port = props.getProperty("port", "8080");
         // TODO: implement ChangeVector if optimistic concurrency is enabled, requires the Database ID
-        // TOD0: Check how to find the Database ID
+        //  Get DatabaseId through an HTTP request with a query
+        //  Add a HashMap to save the current ChangeVector for each ID
 //        boolean concurrency = Boolean.parseBoolean(props.getProperty("useOptimisticConcurrency", "false"));
         url = "http://" + url + ":" + port;
         DocumentStore store =
