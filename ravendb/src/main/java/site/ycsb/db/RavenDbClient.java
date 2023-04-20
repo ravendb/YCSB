@@ -256,7 +256,7 @@ public class RavenDbClient extends DB {
     String records = "";
     records += "{\n\"Commands\": [";
     StringJoiner batchRecord = new StringJoiner(",\n");
-    batchRecord.add(batchedUpdateBuilder(values, key));
+    batchRecord.add(batchedInsertBuilder(values, key));
     records += batchRecord + "\n]\n}";
 
     RequestBody insertBody = RequestBody.create(records, MEDIA_TYPE);
@@ -292,15 +292,6 @@ public class RavenDbClient extends DB {
   }
 
   private String batchedInsertBuilder(Map<String, ByteIterator> values, String key) {
-    return " {\n" + "   \"Id\":\"" + key + "\",\n" +
-        "   \"ChangeVector\": null,\n" +
-        "   \"Document\":" +
-        insertBuilder(values) +
-        "   \"Type\": \"PUT\"\n" +
-        "}";
-  }
-
-  private String batchedUpdateBuilder(Map<String, ByteIterator> values, String key) {
     return " {\n" + "   \"Id\":\"" + key + "\",\n" +
         "   \"ChangeVector\": null,\n" +
         "   \"Document\":" +
