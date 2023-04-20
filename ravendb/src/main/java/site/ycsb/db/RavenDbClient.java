@@ -79,8 +79,8 @@ public class RavenDbClient extends DB {
         databaseName = props.getProperty("ravendb.dbname", "ycsb");
         url = props.getProperty("ravendb.host", null);
         String port = props.getProperty("port", "8080");
-        int maxRequests = Integer.parseInt(props.getProperty("ravendb.maxRequests", "1000"));
-        int maxRequestsPerHost = Integer.parseInt(props.getProperty("ravendb.maxRequestsPerHost", "100"));
+        int maxRequests = Integer.parseInt(props.getProperty("ravendb.maxRequests", "15000"));
+        int maxRequestsPerHost = Integer.parseInt(props.getProperty("ravendb.maxRequestsPerHost", "15000"));
         // TODO: implement ChangeVector if optimistic concurrency is enabled, requires the Database ID
         //  Get DatabaseId through an HTTP request with a query
         //  Add a HashMap to save the current ChangeVector for each ID
