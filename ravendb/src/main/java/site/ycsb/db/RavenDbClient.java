@@ -23,7 +23,8 @@ import java.util.regex.Pattern;
  * RavenDB binding for YCSB framework.
  */
 public class RavenDbClient extends DB {
-  private static final OkHttpClient CLIENT = new OkHttpClient().newBuilder().build();
+
+  private static OkHttpClient CLIENT;
 
   private static String url;
   private static String databaseName;
@@ -78,11 +79,17 @@ public class RavenDbClient extends DB {
         databaseName = props.getProperty("ravendb.dbname", "ycsb");
         url = props.getProperty("ravendb.host", null);
         String port = props.getProperty("port", "8080");
+        int maxRequests = Integer.parseInt(props.getProperty("ravendb.maxRequests", "1000"));
+        int maxRequestsPerHost = Integer.parseInt(props.getProperty("ravendb.maxRequestsPerHost", "100"));
         // TODO: implement ChangeVector if optimistic concurrency is enabled, requires the Database ID
         //  Get DatabaseId through an HTTP request with a query
         //  Add a HashMap to save the current ChangeVector for each ID
 //        boolean concurrency = Boolean.parseBoolean(props.getProperty("useOptimisticConcurrency", "false"));
         url = "http://" + url + ":" + port;
+        Dispatcher dispatcher = new Dispatcher();
+        dispatcher.setMaxRequests(maxRequests);
+        dispatcher.setMaxRequestsPerHost(maxRequestsPerHost);
+        CLIENT = new OkHttpClient().newBuilder().dispatcher(dispatcher).build();
         DocumentStore store =
             new DocumentStore(url, databaseName);
         store.initialize();
@@ -115,14 +122,15 @@ public class RavenDbClient extends DB {
   @Override
   public Status insert(String table, String key,
                        Map<String, ByteIterator> values) {
-    String httpMethod = "PUT";
-    String path = "/docs?id=" + key;
+    String httpMethod = "POST";
+    String path = "/bulk_docs";
     String records = "";
     if (batchSize == 1) {
-      records = insertBuilder(values);
+      records += "{\n\"Commands\": [";
+      StringJoiner batchRecord = new StringJoiner(",\n");
+      batchRecord.add(batchedInsertBuilder(values, key));
+      records += batchRecord + "\n]\n}";
     } else {
-      httpMethod = "POST";
-      path = "/bulk_docs";
       batchInserts.add(batchedInsertBuilder(values, key));
       if (batchInserts.size() == batchSize) {
         records += "{\n\"Commands\": [";
@@ -201,17 +209,11 @@ public class RavenDbClient extends DB {
   @Override
   public Status scan(String table, String startkey, int recordcount,
                      Set<String> fields, Vector<HashMap<String, ByteIterator>> result) {
-    StringBuilder path = new StringBuilder("/docs?id=" + startkey);
-    String regex = "[a-zA-Z]+([0-9]+)";
-    Matcher matcher = Pattern.compile(regex).matcher(startkey);
-    int numKey = 0;
-    if (matcher.find()) {
-      numKey = Integer.parseInt(matcher.group(1));
-    }
-    // TODO: Check if this can be done with BETWEEN instead
-    for (int i = 0; i < recordcount; i++) {
-      path.append("&id=user").append(numKey + i);
-    }
+//    TODO Use numerical key instead, as the scan uses lexical ordering, so for
+//     http://localhost:8080/databases/benchdb/docs?startsWith=user&startAfter=user3995&pageSize=5"  user3996, user3997,
+//     user3998, user3999, user4 are in the result
+    StringBuilder path = new StringBuilder("docs?startsWith=user/&startAfter="
+        + startkey + "&pageSize=" + recordcount);
     Request request = requestBuilder(null, "GET", path.toString());
     try (Response response = CLIENT.newCall(request).execute()) {
       if (response.isSuccessful()) {
@@ -249,10 +251,13 @@ public class RavenDbClient extends DB {
   @Override
   public Status update(String table, String key,
                        Map<String, ByteIterator> values) {
-    String httpMethod = "PUT";
-    String path = "/docs?id=" + key;
-    String records;
-    records = insertBuilder(values);
+    String httpMethod = "POST";
+    String path = "/bulk_docs";
+    String records = "";
+    records += "{\n\"Commands\": [";
+    StringJoiner batchRecord = new StringJoiner(",\n");
+    batchRecord.add(batchedUpdateBuilder(values, key));
+    records += batchRecord + "\n]\n}";
 
     RequestBody insertBody = RequestBody.create(records, MEDIA_TYPE);
     Request request = requestBuilder(insertBody, httpMethod, path);
@@ -287,6 +292,15 @@ public class RavenDbClient extends DB {
   }
 
   private String batchedInsertBuilder(Map<String, ByteIterator> values, String key) {
+    return " {\n" + "   \"Id\":\"" + key + "\",\n" +
+        "   \"ChangeVector\": null,\n" +
+        "   \"Document\":" +
+        insertBuilder(values) +
+        "   \"Type\": \"PUT\"\n" +
+        "}";
+  }
+
+  private String batchedUpdateBuilder(Map<String, ByteIterator> values, String key) {
     return " {\n" + "   \"Id\":\"" + key + "\",\n" +
         "   \"ChangeVector\": null,\n" +
         "   \"Document\":" +
