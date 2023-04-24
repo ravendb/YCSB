@@ -28,7 +28,8 @@ This section describes how to run YCSB on RavenDB.
 * `ravendb.dbname` (required):  the name of the RavenDB database to use for the YCSB, e.g. `ycsb`
 
 * `batchsize` (optional, default=1):  batch insert size, e.g. `1000`
-* 
+* `ravendb.maxRequests` (optional, default=15000):  increased the maximum number of requests to execute concurrently.
+* `ravendb.maxRequestsPerHost` (optional, default=15000):  increased the maximum number of requests for each host to execute concurrently. 
 * `useOptimisticConcurrency` (optional, default=false):  use optimistic concurrency
 
 * `debug` (optional, default=false):  print debug messages

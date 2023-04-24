@@ -15,8 +15,6 @@ import site.ycsb.StringByteIterator;
 import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 
 /**
@@ -24,7 +22,7 @@ import java.util.regex.Pattern;
  */
 public class RavenDbClient extends DB {
 
-  private static OkHttpClient CLIENT;
+  private OkHttpClient client;
 
   private static String url;
   private static String databaseName;
@@ -51,7 +49,7 @@ public class RavenDbClient extends DB {
   public Status delete(String table, String key) {
     String path = "/docs?id=" + key;
     Request request = requestBuilder(null, "DELETE", path);
-    try (Response response = CLIENT.newCall(request).execute()) {
+    try (Response response = client.newCall(request).execute()) {
       if (response.isSuccessful()) {
         return Status.OK;
       } else {
@@ -71,25 +69,28 @@ public class RavenDbClient extends DB {
   @Override
   public void init() {
     synchronized (DB_INIT_COMPLETE) {
+
+      Properties props = getProperties();
+      int maxRequests = Integer.parseInt(props.getProperty("ravendb.maxRequests", "15000"));
+      int maxRequestsPerHost = Integer.parseInt(props.getProperty("ravendb.maxRequestsPerHost", "15000"));
+      Dispatcher dispatcher = new Dispatcher();
+      dispatcher.setMaxRequests(maxRequests);
+      dispatcher.setMaxRequestsPerHost(maxRequestsPerHost);
+      client = new OkHttpClient().newBuilder().dispatcher(dispatcher).build();
       if (!DB_INIT_COMPLETE.get()) {
-        Properties props = getProperties();
         // Set insert batchsize, default 1 - to be YCSB-original equivalent
         batchSize = Integer.parseInt(props.getProperty("batchsize", "1"));
         debug = Boolean.parseBoolean(props.getProperty("debug", "false"));
         databaseName = props.getProperty("ravendb.dbname", "ycsb");
         url = props.getProperty("ravendb.host", null);
         String port = props.getProperty("port", "8080");
-        int maxRequests = Integer.parseInt(props.getProperty("ravendb.maxRequests", "15000"));
-        int maxRequestsPerHost = Integer.parseInt(props.getProperty("ravendb.maxRequestsPerHost", "15000"));
+
         // TODO: implement ChangeVector if optimistic concurrency is enabled, requires the Database ID
         //  Get DatabaseId through an HTTP request with a query
         //  Add a HashMap to save the current ChangeVector for each ID
 //        boolean concurrency = Boolean.parseBoolean(props.getProperty("useOptimisticConcurrency", "false"));
         url = "http://" + url + ":" + port;
-        Dispatcher dispatcher = new Dispatcher();
-        dispatcher.setMaxRequests(maxRequests);
-        dispatcher.setMaxRequestsPerHost(maxRequestsPerHost);
-        CLIENT = new OkHttpClient().newBuilder().dispatcher(dispatcher).build();
+
         DocumentStore store =
             new DocumentStore(url, databaseName);
         store.initialize();
@@ -104,6 +105,8 @@ public class RavenDbClient extends DB {
         store.close();
         DB_INIT_COMPLETE.set(true);
         System.out.println("Setup completed with URL: " + url);
+        System.out.println("maxRequests is set to " + maxRequests +
+            " and maxRequestsPerHost is set to " + maxRequestsPerHost);
       }
     }
   }
@@ -147,7 +150,7 @@ public class RavenDbClient extends DB {
 
     RequestBody insertBody = RequestBody.create(records, MEDIA_TYPE);
     Request request = requestBuilder(insertBody, httpMethod, path);
-    try (Response response = CLIENT.newCall(request).execute()) {
+    try (Response response = client.newCall(request).execute()) {
       if (response.isSuccessful()) {
         return Status.OK;
       } else {
@@ -175,7 +178,7 @@ public class RavenDbClient extends DB {
                      Map<String, ByteIterator> result) {
     String path = "/docs?id=" + key;
     Request request = requestBuilder(null, "GET", path);
-    try (Response response = CLIENT.newCall(request).execute()) {
+    try (Response response = client.newCall(request).execute()) {
       if (response.isSuccessful()) {
         if (debug) {
           JSONObject json = new JSONObject(Objects.requireNonNull(response.body()).string());
@@ -215,7 +218,7 @@ public class RavenDbClient extends DB {
     StringBuilder path = new StringBuilder("docs?startsWith=user/&startAfter="
         + startkey + "&pageSize=" + recordcount);
     Request request = requestBuilder(null, "GET", path.toString());
-    try (Response response = CLIENT.newCall(request).execute()) {
+    try (Response response = client.newCall(request).execute()) {
       if (response.isSuccessful()) {
         if (debug) {
           JSONObject json = new JSONObject(Objects.requireNonNull(response.body()).string());
@@ -261,7 +264,7 @@ public class RavenDbClient extends DB {
 
     RequestBody insertBody = RequestBody.create(records, MEDIA_TYPE);
     Request request = requestBuilder(insertBody, httpMethod, path);
-    try (Response response = CLIENT.newCall(request).execute()) {
+    try (Response response = client.newCall(request).execute()) {
       if (response.isSuccessful()) {
         return Status.OK;
       } else {
