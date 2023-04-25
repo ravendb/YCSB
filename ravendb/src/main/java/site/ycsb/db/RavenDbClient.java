@@ -71,8 +71,8 @@ public class RavenDbClient extends DB {
     synchronized (DB_INIT_COMPLETE) {
 
       Properties props = getProperties();
-      int maxRequests = Integer.parseInt(props.getProperty("ravendb.maxRequests", "15000"));
-      int maxRequestsPerHost = Integer.parseInt(props.getProperty("ravendb.maxRequestsPerHost", "15000"));
+      int maxRequests = Integer.parseInt(props.getProperty("ravendb.maxRequests", "100"));
+      int maxRequestsPerHost = Integer.parseInt(props.getProperty("ravendb.maxRequestsPerHost", "100"));
       Dispatcher dispatcher = new Dispatcher();
       dispatcher.setMaxRequests(maxRequests);
       dispatcher.setMaxRequestsPerHost(maxRequestsPerHost);
