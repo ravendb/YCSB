@@ -28,7 +28,8 @@ public class RavenDbClient extends DB {
   private static String databaseName;
   private final List<String> batchInserts = new ArrayList<>();
   private static boolean debug = false;
-
+  private static HashMap<String, String> changeVectors = new HashMap<>();
+  private static boolean concurrency;
   /**
    * The batch size to use for inserts.
    */
@@ -84,11 +85,7 @@ public class RavenDbClient extends DB {
         databaseName = props.getProperty("ravendb.dbname", "ycsb");
         url = props.getProperty("ravendb.host", null);
         String port = props.getProperty("port", "8080");
-
-        // TODO: implement ChangeVector if optimistic concurrency is enabled, requires the Database ID
-        //  Get DatabaseId through an HTTP request with a query
-        //  Add a HashMap to save the current ChangeVector for each ID
-//        boolean concurrency = Boolean.parseBoolean(props.getProperty("useOptimisticConcurrency", "false"));
+        concurrency = Boolean.parseBoolean(props.getProperty("useOptimisticConcurrency", "false"));
         url = "http://" + url + ":" + port;
 
         DocumentStore store =
@@ -152,6 +149,11 @@ public class RavenDbClient extends DB {
     Request request = requestBuilder(insertBody, httpMethod, path);
     try (Response response = client.newCall(request).execute()) {
       if (response.isSuccessful()) {
+        if (concurrency) {
+          JSONObject json = new JSONObject(Objects.requireNonNull(response.body()).string());
+          JSONArray jsonArray = json.getJSONArray("Results");
+          writeChangeVectorWrite(jsonArray);
+        }
         return Status.OK;
       } else {
         System.err.println(Objects.requireNonNull(response.body()).string());
@@ -212,19 +214,18 @@ public class RavenDbClient extends DB {
   @Override
   public Status scan(String table, String startkey, int recordcount,
                      Set<String> fields, Vector<HashMap<String, ByteIterator>> result) {
-//    TODO Use numerical key instead, as the scan uses lexical ordering, so for
-//     http://localhost:8080/databases/benchdb/docs?startsWith=user&startAfter=user3995&pageSize=5"  user3996, user3997,
-//     user3998, user3999, user4 are in the result
-    StringBuilder path = new StringBuilder("docs?startsWith=user/&startAfter="
-        + startkey + "&pageSize=" + recordcount);
-    Request request = requestBuilder(null, "GET", path.toString());
+    // the scan uses lexical ordering, so for
+    // http://localhost:8080/databases/benchdb/docs?startsWith=user&startAfter=user3995&pageSize=5"  user3996, user3997,
+    // user3998, user3999, user4 are in the result
+    String path = "/docs?startsWith=user/&startAfter=" + startkey + "&pageSize=" + recordcount;
+    Request request = requestBuilder(null, "GET", path);
     try (Response response = client.newCall(request).execute()) {
       if (response.isSuccessful()) {
         if (debug) {
           JSONObject json = new JSONObject(Objects.requireNonNull(response.body()).string());
           JSONArray jsonArray = json.getJSONArray("Results");
           for (int i = 0; i < jsonArray.length(); i++) {
-            HashMap<String, ByteIterator> resultMap = new HashMap<String, ByteIterator>();
+            HashMap<String, ByteIterator> resultMap = new HashMap<>();
             fillMap(resultMap, jsonArray);
             result.add(resultMap);
           }
@@ -259,13 +260,18 @@ public class RavenDbClient extends DB {
     String records = "";
     records += "{\n\"Commands\": [";
     StringJoiner batchRecord = new StringJoiner(",\n");
-    batchRecord.add(batchedInsertBuilder(values, key));
+    batchRecord.add(batchUpdateBuilder(values, key));
     records += batchRecord + "\n]\n}";
 
     RequestBody insertBody = RequestBody.create(records, MEDIA_TYPE);
     Request request = requestBuilder(insertBody, httpMethod, path);
     try (Response response = client.newCall(request).execute()) {
       if (response.isSuccessful()) {
+        if (concurrency) {
+          JSONObject json = new JSONObject(Objects.requireNonNull(response.body()).string());
+          JSONArray jsonArray = json.getJSONArray("Results");
+          writeChangeVectorUpdate(key, jsonArray);
+        }
         return Status.OK;
       } else {
         System.err.println(Objects.requireNonNull(response.body()).string());
@@ -303,6 +309,40 @@ public class RavenDbClient extends DB {
         "}";
   }
 
+  private String batchUpdateBuilder(Map<String, ByteIterator> values, String key) {
+    if (concurrency && changeVectors.get(key) != null) {
+      return " {\n" + "   \"Id\":\"" + key + "\",\n" +
+          "   \"ChangeVector\": \"" + changeVectors.get(key) + "\",\n" +
+          "   \"Patch\":" +
+          updateBuilder(values) +
+          "   \"Type\": \"PATCH\"\n" +
+          "}";
+    } else {
+      return " {\n" + "   \"Id\":\"" + key + "\",\n" +
+          "   \"ChangeVector\": null,\n" +
+          "   \"Patch\":" +
+          updateBuilder(values) +
+          "   \"Type\": \"PATCH\"\n" +
+          "}";
+    }
+  }
+
+  private String updateBuilder(Map<String, ByteIterator> values) {
+    StringBuilder records = new StringBuilder(" {\n \"Script\":\"");
+
+    for (Map.Entry<String, ByteIterator> entry : values.entrySet()) {
+      String value = entry.getValue().toString();
+      // Replace backslash, quotation marks and double quotation marks to get valid json
+      value = value.replaceAll("\\\\", "a");
+      value = value.replaceAll("\"", "b");
+      value = value.replaceAll("'", "c");
+      records.append("this.").append(entry.getKey()).append("='").append(value).append("';");
+    }
+
+    records.append("\",\n},");
+    return records.toString();
+  }
+
   //TODO implement authorization
   private Request requestBuilder(RequestBody body, String method, String path) {
     return new Request.Builder()
@@ -321,6 +361,24 @@ public class RavenDbClient extends DB {
             resultMap.put(key, new StringByteIterator(jsonLineItem.get(key).toString()));
           }
         }
+      }
+    }
+  }
+
+  protected void writeChangeVectorUpdate(String id, JSONArray jsonArray) {
+    for (Object o : jsonArray) {
+      if (!JSONObject.NULL.equals(o)) {
+        JSONObject jsonLineItem = (JSONObject) o;
+        changeVectors.put(id, jsonLineItem.get("ChangeVector").toString());
+      }
+    }
+  }
+
+  protected void writeChangeVectorWrite(JSONArray jsonArray) {
+    for (Object o : jsonArray) {
+      if (!JSONObject.NULL.equals(o)) {
+        JSONObject jsonLineItem = (JSONObject) o;
+        changeVectors.put(jsonLineItem.get("@id").toString(), jsonLineItem.get("@change-vector").toString());
       }
     }
   }
