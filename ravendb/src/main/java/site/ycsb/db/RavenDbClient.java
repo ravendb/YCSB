@@ -5,6 +5,7 @@ import net.ravendb.client.serverwide.DatabaseRecord;
 import net.ravendb.client.serverwide.operations.CreateDatabaseOperation;
 import net.ravendb.client.serverwide.operations.GetDatabaseNamesOperation;
 import okhttp3.*;
+import org.apache.commons.lang3.StringUtils;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import site.ycsb.ByteIterator;
@@ -126,24 +127,25 @@ public class RavenDbClient extends DB {
     String path = "/bulk_docs";
     String records = "";
     if (batchSize == 1) {
-      records += "{\n\"Commands\": [";
-      StringJoiner batchRecord = new StringJoiner(",\n");
+      records += "{\"Commands\":[";
+      StringJoiner batchRecord = new StringJoiner(",");
       batchRecord.add(batchedInsertBuilder(values, key));
-      records += batchRecord + "\n]\n}";
+      records += batchRecord + "]}";
     } else {
       batchInserts.add(batchedInsertBuilder(values, key));
       if (batchInserts.size() == batchSize) {
-        records += "{\n\"Commands\": [";
-        StringJoiner batchRecord = new StringJoiner(",\n");
+        records += "{\"Commands\":[";
+        StringJoiner batchRecord = new StringJoiner(",");
         for (String record : batchInserts) {
           batchRecord.add(record);
         }
-        records += batchRecord + "\n]\n}";
+        records += batchRecord + "]}";
         batchInserts.clear();
       } else {
         return Status.BATCHED_OK;
       }
     }
+
 
     RequestBody insertBody = RequestBody.create(records, MEDIA_TYPE);
     Request request = requestBuilder(insertBody, httpMethod, path);
@@ -283,30 +285,28 @@ public class RavenDbClient extends DB {
     }
   }
 
+  private static String[] REPLACE_INPUT = new String[] { "\"", "\\" };
+  private static String[] REPLACE_OUTPUT = new String[] { "\\\"", "\\\\" };
+
   private String insertBuilder(Map<String, ByteIterator> values) {
-    StringBuilder records = new StringBuilder(" {\n");
+    StringBuilder records = new StringBuilder(2048);
+    records.append("{");
 
     for (Map.Entry<String, ByteIterator> entry : values.entrySet()) {
       String value = entry.getValue().toString();
       // Escape backslash and quotation marks to get valid json
-      value = value.replaceAll("\\\\", "\\\\\\\\");
-      value = value.replaceAll("\"", "\\\\\"");
-      records.append("    \"").append(entry.getKey()).append("\": \"").append(value).append("\",\n");
+      value = StringUtils.replaceEach(value, REPLACE_INPUT, REPLACE_OUTPUT);
+      records.append("\"").append(entry.getKey()).append("\": \"").append(value).append("\",");
     }
-    records.append("   \"@metadata\":{\n");
-    records.append("   \"@collection\":\"records\"\n");
-    records.append("   }\n");
-    records.append("}");
+
+    records.append("\"@metadata\":{\"@collection\":\"records\"}}");
     return records.toString();
   }
 
   private String batchedInsertBuilder(Map<String, ByteIterator> values, String key) {
-    return " {\n" + "   \"Id\":\"" + key + "\",\n" +
-        "   \"ChangeVector\": null,\n" +
-        "   \"Document\":" +
+    return "{\"Id\":\"" + key + "\",\"ChangeVector\":null,\"Document\":" +
         insertBuilder(values) +
-        "   \"Type\": \"PUT\"\n" +
-        "}";
+        "\"Type\": \"PUT\"}";
   }
 
   private String batchUpdateBuilder(Map<String, ByteIterator> values, String key) {
